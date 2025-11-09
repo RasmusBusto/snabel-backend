@@ -8,10 +8,36 @@ The system uses PostgreSQL 16 with reactive async drivers. All database operatio
 
 ## Database Connection
 
+- **Host**: localhost
+- **Port**: 5432
+- **Database Name**: snabel_accounting
 - **JDBC URL**: `jdbc:postgresql://localhost:5432/snabel_accounting`
 - **Reactive URL**: `postgresql://localhost:5432/snabel_accounting`
 - **Username**: `snabel`
 - **Password**: `snabel` (change in production!)
+
+### Setup Instructions
+
+Use these commands to set up the database (requires existing PostgreSQL installation):
+
+```bash
+# Using existing PostgreSQL with postgres/postgres credentials
+PGPASSWORD=postgres psql -h localhost -U postgres -d postgres <<EOF
+CREATE USER snabel WITH PASSWORD 'snabel';
+CREATE DATABASE snabel_accounting OWNER snabel;
+GRANT ALL PRIVILEGES ON DATABASE snabel_accounting TO snabel;
+\c snabel_accounting
+GRANT ALL ON SCHEMA public TO snabel;
+ALTER SCHEMA public OWNER TO snabel;
+EOF
+```
+
+### Verify Connection
+
+```bash
+# Test connection
+PGPASSWORD=snabel psql -h localhost -U snabel -d snabel_accounting -c "SELECT version();"
+```
 
 ## Tables
 

@@ -15,13 +15,14 @@ A modern Norwegian accounting system built with Quarkus, fully async with reacti
 ## Quick Start
 
 ```bash
-# 1. Set up database (requires sudo for PostgreSQL)
-sudo -u postgres psql <<EOF
-CREATE DATABASE snabel_accounting;
+# 1. Set up database (using existing PostgreSQL with postgres/postgres credentials)
+PGPASSWORD=postgres psql -h localhost -U postgres -d postgres <<EOF
 CREATE USER snabel WITH PASSWORD 'snabel';
+CREATE DATABASE snabel_accounting OWNER snabel;
 GRANT ALL PRIVILEGES ON DATABASE snabel_accounting TO snabel;
-\\c snabel_accounting
+\c snabel_accounting
 GRANT ALL ON SCHEMA public TO snabel;
+ALTER SCHEMA public OWNER TO snabel;
 EOF
 
 # 2. Run the application
@@ -29,6 +30,14 @@ EOF
 ```
 
 The application will start on http://localhost:8080
+
+### Database Connection Details
+- **Host**: localhost
+- **Port**: 5432
+- **Database**: snabel_accounting
+- **Username**: snabel
+- **Password**: snabel
+- **PostgreSQL Admin**: postgres/postgres (for setup only)
 
 ## API Examples
 

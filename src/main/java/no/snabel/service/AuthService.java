@@ -1,6 +1,8 @@
 package no.snabel.service;
 
 import io.quarkus.elytron.security.common.BcryptUtil;
+import io.quarkus.hibernate.reactive.panache.common.WithSession;
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -17,6 +19,7 @@ public class AuthService {
     @Inject
     TokenService tokenService;
 
+    @WithTransaction
     public Uni<LoginResponse> login(LoginRequest request) {
         return User.findByUsername(request.username)
                 .onItem().ifNull().failWith(() -> new SecurityException("Invalid username or password"))
@@ -54,6 +57,7 @@ public class AuthService {
                 });
     }
 
+    @WithTransaction
     public Uni<User> registerUser(User user, String plainPassword) {
         user.passwordHash = BcryptUtil.bcryptHash(plainPassword);
         user.createdAt = LocalDateTime.now();
