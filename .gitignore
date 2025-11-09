@@ -1,0 +1,137 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Quarkus
+.quarkus/
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# NetBeans
+nbproject/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.nfs*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+*.log.*
+logs/
+
+# Temp files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# Package Files
+*.nar
+
+# Build artifacts
+*.so
+*.dylib
+
+# Test coverage
+*.gcda
+*.gcno
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+# Application specific
+/tmp/
+application-*.properties
+
+# Database
+*.db
+*.sqlite
+*.h2.db
+
+# Secrets (never commit these!)
+**/privateKey.pem
+**/publicKey.pem
+*.key
+*.pem
+*.p12
+*.jks
+credentials.json
+secrets.yml
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Node (if using any frontend tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Quarkus specific
+**/quarkus.log
+.quarkus-cli/
