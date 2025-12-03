@@ -34,6 +34,18 @@ public class Customer extends PanacheEntityBase {
 
     public String country = "Norge";
 
+    @Column(name = "bank_account", length = 20)
+    public String bankAccount;
+
+    @Column(name = "bank_name")
+    public String bankName;
+
+    @Column(length = 34)
+    public String iban;
+
+    @Column(name = "swift_bic", length = 11)
+    public String swiftBic;
+
     @Column(name = "created_at", nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();
 
