@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class EFakturaServiceTest {
 
     @Inject
-    EFakturaService eFakturaService;
+    EHFInvoiceService eFakturaService;
 
     @Test
     public void testGenerateEHF() {
@@ -126,7 +126,6 @@ public class EFakturaServiceTest {
         customer.email = "test@test.no";
         customer.phone = "+47 12345678";
         customer.bankAccount = "12345678901";
-        customer.bankName = "Test Bank";
         return customer;
     }
 

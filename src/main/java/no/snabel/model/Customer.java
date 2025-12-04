@@ -37,14 +37,17 @@ public class Customer extends PanacheEntityBase {
     @Column(name = "bank_account", length = 20)
     public String bankAccount;
 
-    @Column(name = "bank_name")
-    public String bankName;
-
     @Column(length = 34)
     public String iban;
 
     @Column(name = "swift_bic", length = 11)
     public String swiftBic;
+
+    @Column(name = "endpoint_id", length = 100)
+    public String endpointId;
+
+    @Column(name = "endpoint_scheme", length = 20)
+    public String endpointScheme = "0192"; // Default to Norwegian org number scheme
 
     @Column(name = "created_at", nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();

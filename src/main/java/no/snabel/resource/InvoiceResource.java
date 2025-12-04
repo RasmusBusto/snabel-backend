@@ -8,7 +8,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import no.snabel.model.Customer;
 import no.snabel.model.Invoice;
-import no.snabel.service.EFakturaService;
+import no.snabel.service.EHFInvoiceService;
 import no.snabel.service.InvoicePdfService;
 import org.hibernate.Hibernate;
 
@@ -22,7 +22,7 @@ import java.util.List;
 public class InvoiceResource extends SecureResource {
 
     @Inject
-    EFakturaService eFakturaService;
+    EHFInvoiceService eFakturaService;
 
     @Inject
     InvoicePdfService invoicePdfService;

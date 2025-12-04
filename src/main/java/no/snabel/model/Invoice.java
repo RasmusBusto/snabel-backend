@@ -74,6 +74,15 @@ public class Invoice extends PanacheEntityBase {
     @Column(name = "contract_reference", length = 100)
     public String contractReference;
 
+    @Column(name = "order_reference", length = 100)
+    public String orderReference;
+
+    @Column(name = "client_endpoint_id", length = 100)
+    public String clientEndpointId;
+
+    @Column(name = "client_endpoint_scheme", length = 20)
+    public String clientEndpointScheme = "0192"; // Default to Norwegian org number scheme
+
     @Column(columnDefinition = "TEXT")
     public String notes;
 
