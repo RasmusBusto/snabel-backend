@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "invoices")
@@ -60,6 +62,27 @@ public class Invoice extends PanacheEntityBase {
     @Column(name = "payment_terms")
     public String paymentTerms;
 
+    @Column(name = "payment_reference", length = 50)
+    public String paymentReference;
+
+    @Column(name = "bank_account", length = 20)
+    public String bankAccount;
+
+    @Column(name = "buyer_reference", length = 100)
+    public String buyerReference;
+
+    @Column(name = "contract_reference", length = 100)
+    public String contractReference;
+
+    @Column(name = "order_reference", length = 100)
+    public String orderReference;
+
+    @Column(name = "client_endpoint_id", length = 100)
+    public String clientEndpointId;
+
+    @Column(name = "client_endpoint_scheme", length = 20)
+    public String clientEndpointScheme = "0192"; // Default to Norwegian org number scheme
+
     @Column(columnDefinition = "TEXT")
     public String notes;
 
@@ -70,6 +93,9 @@ public class Invoice extends PanacheEntityBase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     public User createdBy;
+
+    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    public List<InvoiceLine> lines = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false)
     public LocalDateTime createdAt = LocalDateTime.now();

@@ -2,10 +2,15 @@ package no.snabel.resource;
 
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import no.snabel.model.Customer;
 import no.snabel.model.Invoice;
+import no.snabel.service.EHFInvoiceService;
+import no.snabel.service.InvoicePdfService;
+import org.hibernate.Hibernate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,6 +20,12 @@ import java.util.List;
 @Consumes(MediaType.APPLICATION_JSON)
 @RolesAllowed({"USER", "ADMIN", "ACCOUNTANT", "CLIENT"})
 public class InvoiceResource extends SecureResource {
+
+    @Inject
+    EHFInvoiceService eFakturaService;
+
+    @Inject
+    InvoicePdfService invoicePdfService;
 
     @GET
     public Uni<List<Invoice>> listInvoices(
@@ -130,5 +141,79 @@ public class InvoiceResource extends SecureResource {
                     return invoice.persistAndFlush()
                             .map(inv -> Response.ok(inv).build());
                 });
+    }
+
+    @GET
+    @Path("/{id}/pdf")
+    @Produces("application/pdf")
+    public Uni<Response> downloadInvoicePdf(@PathParam("id") Long id) {
+        Long customerId = getCustomerId();
+        return Invoice.<Invoice>find("id = ?1 and customer.id = ?2", id, customerId)
+                .firstResult()
+                .chain(invoice -> {
+                    if (invoice == null) {
+                        return Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build());
+                    }
+
+                    // Fetch related entities
+                    return fetchInvoiceWithRelations(invoice)
+                            .map(inv -> {
+                                try {
+                                    byte[] pdfBytes = invoicePdfService.generatePdf(inv);
+                                    return Response.ok(pdfBytes)
+                                            .header("Content-Disposition",
+                                                    "attachment; filename=\"faktura-" + inv.invoiceNumber + ".pdf\"")
+                                            .build();
+                                } catch (Exception e) {
+                                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                                            .entity("{\"error\": \"Failed to generate PDF: " + e.getMessage() + "\"}")
+                                            .type(MediaType.APPLICATION_JSON)
+                                            .build();
+                                }
+                            });
+                });
+    }
+
+    @GET
+    @Path("/{id}/efaktura")
+    @Produces(MediaType.APPLICATION_XML)
+    public Uni<Response> downloadInvoiceEfaktura(@PathParam("id") Long id) {
+        Long customerId = getCustomerId();
+        return Invoice.<Invoice>find("id = ?1 and customer.id = ?2", id, customerId)
+                .firstResult()
+                .chain(invoice -> {
+                    if (invoice == null) {
+                        return Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build());
+                    }
+
+                    // Fetch related entities
+                    return fetchInvoiceWithRelations(invoice)
+                            .map(inv -> {
+                                try {
+                                    String ehfXml = eFakturaService.generateEHF(inv);
+                                    return Response.ok(ehfXml)
+                                            .header("Content-Disposition",
+                                                    "attachment; filename=\"efaktura-" + inv.invoiceNumber + ".xml\"")
+                                            .build();
+                                } catch (Exception e) {
+                                    return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                                            .entity("{\"error\": \"Failed to generate eFaktura: " + e.getMessage() + "\"}")
+                                            .type(MediaType.APPLICATION_JSON)
+                                            .build();
+                                }
+                            });
+                });
+    }
+
+    /**
+     * Fetch invoice with all related entities needed for document generation
+     */
+    private Uni<Invoice> fetchInvoiceWithRelations(Invoice invoice) {
+        return Uni.createFrom().item(() -> {
+            // Initialize lazy-loaded associations
+            Hibernate.initialize(invoice.lines);
+            Hibernate.initialize(invoice.customer);
+            return invoice;
+        });
     }
 }

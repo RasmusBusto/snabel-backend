@@ -66,6 +66,17 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-jwt-build</artifactId>
         </dependency>
+        <!-- JAXB for XML generation (EHF/UBL invoice format) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jaxb</artifactId>
+        </dependency>
+        <!-- Apache PDFBox for PDF invoice generation -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
