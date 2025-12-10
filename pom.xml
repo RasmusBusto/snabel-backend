@@ -15,6 +15,8 @@
         <quarkus.platform.version>3.29.2</quarkus.platform.version>
         <skipITs>true</skipITs>
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
+        <!-- Oxalis-NG version for PEPPOL integration -->
+        <oxalis.version>6.3.0</oxalis.version>
     </properties>
 
     <dependencyManagement>
@@ -77,6 +79,38 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.3</version>
         </dependency>
+
+        <!-- Oxalis PEPPOL Access Point - for sending EHF invoices via PEPPOL network -->
+        <!-- Note: Using classic Oxalis 6.3.0 until oxalis-ng artifacts are available on Maven Central -->
+        <!-- When oxalis-ng is available, change groupId to network.oxalis.ng -->
+        <dependency>
+            <groupId>network.oxalis</groupId>
+            <artifactId>oxalis-api</artifactId>
+            <version>${oxalis.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>network.oxalis</groupId>
+            <artifactId>oxalis-commons</artifactId>
+            <version>${oxalis.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>network.oxalis</groupId>
+            <artifactId>oxalis-outbound</artifactId>
+            <version>${oxalis.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>network.oxalis</groupId>
+            <artifactId>oxalis-as4</artifactId>
+            <version>${oxalis.version}</version>
+        </dependency>
+
+        <!-- Google Guice for Oxalis dependency injection -->
+        <dependency>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>7.0.0</version>
+        </dependency>
+
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>

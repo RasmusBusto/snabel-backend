@@ -1,0 +1,82 @@
+# Oxalis Configuration File
+# Copy this to your OXALIS_HOME/conf directory and rename to oxalis.conf
+# Default OXALIS_HOME: /opt/oxalis-home or set via environment variable
+
+# ==================================================
+# PEPPOL Participant Identification
+# ==================================================
+# Your organization's PEPPOL participant ID
+# Format: scheme:identifier (e.g., 0192:123456789 for Norwegian org numbers)
+oxalis.participant.identifier=0192:YOUR_ORG_NUMBER
+
+# ==================================================
+# Directory Configuration
+# ==================================================
+# Inbound messages directory (received documents)
+oxalis.path.inbound=${oxalis.home}/inbound
+
+# Outbound messages directory (documents to be sent)
+oxalis.path.outbound=${oxalis.home}/outbound
+
+# Evidence directory (transmission receipts/MDN)
+oxalis.path.evidence=${oxalis.home}/evidence
+
+# ==================================================
+# Keystore Configuration (PEPPOL Certificates)
+# ==================================================
+# Path to keystore containing your PEPPOL certificates
+oxalis.keystore.path=${oxalis.home}/conf/oxalis-keystore.jks
+
+# Keystore password (use environment variable in production)
+oxalis.keystore.password=${OXALIS_KEYSTORE_PASSWORD}
+
+# ==================================================
+# SMP (Service Metadata Publisher) Configuration
+# ==================================================
+# SMP URL for looking up participant endpoints
+# Production: http://B-{hash}.iso6523-actorid-upis.edelivery.tech.ec.europa.eu
+# Test: http://test-smp.difi.no
+oxalis.smp.url=http://B-xxx.iso6523-actorid-upis.edelivery.tech.ec.europa.eu
+
+# Lookup method: NAPTR (DNS-based) or BUSDOX (deprecated)
+# NAPTR is default in Oxalis 6.x and oxalis-ng
+oxalis.lookup.method=NAPTR
+
+# ==================================================
+# AS4 Protocol Configuration
+# ==================================================
+# AS4 endpoint URL (if running as server)
+oxalis.as4.endpoint=http://localhost:8080/oxalis/as4
+
+# AS4 receipt type
+oxalis.as4.receipt.type=non-repudiation
+
+# ==================================================
+# HTTP Configuration
+# ==================================================
+# Connection timeout (milliseconds)
+oxalis.http.connection.timeout=30000
+
+# Read timeout (milliseconds)
+oxalis.http.read.timeout=30000
+
+# ==================================================
+# Logging Configuration
+# ==================================================
+# Enable transmission logging
+oxalis.transmission.log.enabled=true
+
+# Log directory
+oxalis.transmission.log.dir=${oxalis.home}/logs
+
+# ==================================================
+# Advanced Settings
+# ==================================================
+# Enable validation of inbound messages
+oxalis.validation.enabled=true
+
+# Enable receipt validation
+oxalis.receipt.validation.enabled=true
+
+# Maximum message size (bytes) - 100MB default
+oxalis.message.max.size=104857600
