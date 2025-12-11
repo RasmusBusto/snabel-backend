@@ -1,10 +1,10 @@
 package no.snabel.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import no.snabel.ehf.ubl.InvoiceType;
-import no.snabel.ehf.ubl.cac.*;
-import no.snabel.ehf.ubl.types.*;
-import no.snabel.ehf.ubl.writer.UBLWriter;
+import no.snabel.format.ehf.ubl.InvoiceType;
+import no.snabel.format.ehf.ubl.cac.*;
+import no.snabel.format.ehf.ubl.types.*;
+import no.snabel.format.ehf.ubl.writer.UBLWriter;
 import no.snabel.model.Customer;
 import no.snabel.model.Invoice;
 import no.snabel.model.InvoiceLine;

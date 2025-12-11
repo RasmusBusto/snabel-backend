@@ -85,9 +85,18 @@ accounting-backend/
 │   ├── security/           # Security components
 │   │   └── TokenService.java       # JWT token generation
 │   │
-│   └── dto/                # Data transfer objects
-│       ├── LoginRequest.java
-│       └── LoginResponse.java
+│   ├── dto/                # Data transfer objects
+│   │   ├── LoginRequest.java
+│   │   └── LoginResponse.java
+│   │
+│   └── format/             # External format support
+│       └── ehf/            # EHF/PEPPOL format support
+│           └── ubl/        # UBL 2.1 data model
+│               ├── InvoiceType.java      # Main invoice structure
+│               ├── types/                # Base types (Amount, Code, etc.)
+│               ├── cac/                  # Common aggregate components
+│               └── writer/               # XML serialization
+│                   └── UBLWriter.java
 │
 ├── src/main/resources/
 │   ├── db/migration/       # Flyway migrations
