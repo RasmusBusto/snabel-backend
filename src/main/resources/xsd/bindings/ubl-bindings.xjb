@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jaxb:bindings
+    xmlns:jaxb="https://jakarta.ee/xml/ns/jaxb"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:xjc="http://java.sun.com/xml/ns/jaxb/xjc"
+    jaxb:version="3.0"
+    jaxb:extensionBindingPrefixes="xjc">
+
+    <!-- Global bindings -->
+    <jaxb:globalBindings>
+        <!-- Generate builder methods -->
+        <xjc:simple/>
+
+        <!-- Use BigDecimal for decimals (financial precision) -->
+        <jaxb:javaType
+            name="java.math.BigDecimal"
+            xmlType="xsd:decimal"
+            parseMethod="new"
+            printMethod="toString"/>
+
+        <!-- Use LocalDate for dates -->
+        <jaxb:javaType
+            name="java.time.LocalDate"
+            xmlType="xsd:date"
+            parseMethod="java.time.LocalDate.parse"
+            printMethod="java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.format"/>
+    </jaxb:globalBindings>
+
+    <!-- Schema-specific bindings for UBL Invoice -->
+    <jaxb:bindings schemaLocation="../ubl-2.1/maindoc/UBL-Invoice-2.1.xsd">
+        <jaxb:schemaBindings>
+            <jaxb:package name="no.snabel.generated.ubl"/>
+        </jaxb:schemaBindings>
+    </jaxb:bindings>
+
+    <!-- Common aggregate components (CAC) - complex types like PartyType, AddressType -->
+    <jaxb:bindings schemaLocation="../ubl-2.1/common/UBL-CommonAggregateComponents-2.1.xsd">
+        <jaxb:schemaBindings>
+            <jaxb:package name="no.snabel.generated.ubl.cac"/>
+        </jaxb:schemaBindings>
+    </jaxb:bindings>
+
+    <!-- Common basic components (CBC) - simple wrapper elements -->
+    <jaxb:bindings schemaLocation="../ubl-2.1/common/UBL-CommonBasicComponents-2.1.xsd">
+        <jaxb:schemaBindings>
+            <jaxb:package name="no.snabel.generated.ubl.cbc"/>
+        </jaxb:schemaBindings>
+    </jaxb:bindings>
+
+    <!-- Unqualified data types -->
+    <jaxb:bindings schemaLocation="../ubl-2.1/common/UBL-UnqualifiedDataTypes-2.1.xsd">
+        <jaxb:schemaBindings>
+            <jaxb:package name="no.snabel.generated.ubl.udt"/>
+        </jaxb:schemaBindings>
+    </jaxb:bindings>
+
+    <!-- Qualified data types -->
+    <jaxb:bindings schemaLocation="../ubl-2.1/common/UBL-QualifiedDataTypes-2.1.xsd">
+        <jaxb:schemaBindings>
+            <jaxb:package name="no.snabel.generated.ubl.qdt"/>
+        </jaxb:schemaBindings>
+    </jaxb:bindings>
+
+    <!-- CCTS Core Component Types -->
+    <jaxb:bindings schemaLocation="../ubl-2.1/common/CCTS_CCT_SchemaModule-2.1.xsd">
+        <jaxb:schemaBindings>
+            <jaxb:package name="no.snabel.generated.ubl.cct"/>
+        </jaxb:schemaBindings>
+    </jaxb:bindings>
+
+</jaxb:bindings>
