@@ -1,26 +1,18 @@
 package no.snabel.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import no.snabel.format.ehf.ubl.InvoiceType;
+import no.snabel.format.ehf.ubl.cac.*;
+import no.snabel.format.ehf.ubl.types.*;
+import no.snabel.format.ehf.ubl.writer.UBLWriter;
 import no.snabel.model.Customer;
 import no.snabel.model.Invoice;
 import no.snabel.model.InvoiceLine;
 
-import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 
 /**
  * Service for generating eFaktura (Norwegian electronic invoices) in EHF 3.0 format
@@ -30,229 +22,240 @@ import org.w3c.dom.Element;
 @ApplicationScoped
 public class EHFInvoiceService {
 
-    private static final String UBL_NAMESPACE = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2";
-    private static final String CAC_NAMESPACE = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
-    private static final String CBC_NAMESPACE = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2";
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
+    private final UBLWriter ublWriter;
+
+    public EHFInvoiceService() {
+        try {
+            this.ublWriter = new UBLWriter();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize UBLWriter", e);
+        }
+    }
 
     /**
-     * Generate EHF 3.0 XML for an invoice
+     * Generate EHF 3.0 XML for an invoice using UBL classes
      */
     public String generateEHF(Invoice invoice) {
         try {
-            DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-            docFactory.setNamespaceAware(true);
-            DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-            Document doc = docBuilder.newDocument();
+            InvoiceType ublInvoice = new InvoiceType();
 
-            // Root element: Invoice
-            Element rootElement = doc.createElementNS(UBL_NAMESPACE, "Invoice");
-            rootElement.setAttribute("xmlns:cac", CAC_NAMESPACE);
-            rootElement.setAttribute("xmlns:cbc", CBC_NAMESPACE);
-            doc.appendChild(rootElement);
-
-            // Customization ID (EHF 3.0)
-            addCbcElement(doc, rootElement, "CustomizationID",
-                "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0");
-
-            // Profile ID (PEPPOL BIS Billing)
-            addCbcElement(doc, rootElement, "ProfileID", "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0");
-
-            // Invoice number
-            addCbcElement(doc, rootElement, "ID", invoice.invoiceNumber);
-
-            // Issue date
-            addCbcElement(doc, rootElement, "IssueDate", invoice.invoiceDate.format(DATE_FORMATTER));
-
-            // Due date
-            addCbcElement(doc, rootElement, "DueDate", invoice.dueDate.format(DATE_FORMATTER));
-
-            // Invoice type code (380 = Commercial invoice)
-            addCbcElement(doc, rootElement, "InvoiceTypeCode", "380");
-
-            // Document currency code
-            addCbcElement(doc, rootElement, "DocumentCurrencyCode", invoice.currency);
+            // Core metadata
+            setInvoiceMetadata(ublInvoice, invoice);
 
             // Buyer reference or Order reference (at least one is mandatory per PEPPOL-EN16931-R003)
-            if (invoice.buyerReference != null && !invoice.buyerReference.isEmpty()) {
-                addCbcElement(doc, rootElement, "BuyerReference", invoice.buyerReference);
-            } else if (invoice.orderReference != null && !invoice.orderReference.isEmpty()) {
-                Element orderRef = addCacElement(doc, rootElement, "OrderReference");
-                addCbcElement(doc, orderRef, "ID", invoice.orderReference);
-            } else {
-                // Fallback: use invoice number as buyer reference to ensure compliance
-                addCbcElement(doc, rootElement, "BuyerReference", invoice.invoiceNumber);
-            }
+            setBuyerReferenceOrOrderReference(ublInvoice, invoice);
 
             // Contract reference (if available)
             if (invoice.contractReference != null && !invoice.contractReference.isEmpty()) {
-                Element contractDocRef = addCacElement(doc, rootElement, "ContractDocumentReference");
-                addCbcElement(doc, contractDocRef, "ID", invoice.contractReference);
+                DocumentReferenceType contractRef = new DocumentReferenceType(invoice.contractReference);
+                ublInvoice.setContractDocumentReference(contractRef);
             }
 
-            // Accounting Supplier Party (Seller/Supplier)
-            addSupplierParty(doc, rootElement, invoice.customer);
+            // Parties
+            ublInvoice.setAccountingSupplierParty(createSupplierParty(invoice.customer));
+            ublInvoice.setAccountingCustomerParty(createCustomerParty(invoice));
 
-            // Accounting Customer Party (Buyer/Customer)
-            addCustomerParty(doc, rootElement, invoice);
-
-            // Payment means (bank transfer)
-            addPaymentMeans(doc, rootElement, invoice);
+            // Payment
+            ublInvoice.getPaymentMeans().add(createPaymentMeans(invoice));
 
             // Payment terms
             if (invoice.paymentTerms != null && !invoice.paymentTerms.isEmpty()) {
-                Element paymentTermsElement = addCacElement(doc, rootElement, "PaymentTerms");
-                addCbcElement(doc, paymentTermsElement, "Note", invoice.paymentTerms);
+                ublInvoice.setPaymentTerms(new TextType(invoice.paymentTerms));
             }
 
             // Tax total
-            addTaxTotal(doc, rootElement, invoice);
+            ublInvoice.getTaxTotals().add(createTaxTotal(invoice));
 
             // Legal monetary total
-            addLegalMonetaryTotal(doc, rootElement, invoice);
+            ublInvoice.setLegalMonetaryTotal(createLegalMonetaryTotal(invoice));
 
             // Invoice lines
+            int lineNumber = 1;
             for (InvoiceLine line : invoice.lines) {
-                addInvoiceLine(doc, rootElement, line);
+                ublInvoice.getInvoiceLines().add(createInvoiceLine(line, lineNumber++, invoice.currency));
             }
 
-            // Transform to XML string
-            return transformToString(doc);
+            return ublWriter.writeToString(ublInvoice);
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate EHF XML", e);
         }
     }
 
-    private void addSupplierParty(Document doc, Element parent, Customer supplier) {
-        Element supplierParty = addCacElement(doc, parent, "AccountingSupplierParty");
-        Element party = addCacElement(doc, supplierParty, "Party");
+    private void setInvoiceMetadata(InvoiceType ublInvoice, Invoice invoice) {
+        // Customization ID (EHF 3.0)
+        ublInvoice.setCustomizationID(new IdentifierType(
+            "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0"));
+
+        // Profile ID (PEPPOL BIS Billing)
+        ublInvoice.setProfileID(new IdentifierType("urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"));
+
+        // Invoice number
+        ublInvoice.setId(new IdentifierType(invoice.invoiceNumber));
+
+        // Issue date
+        DateType issueDate = new DateType();
+        issueDate.setValue(invoice.invoiceDate);
+        ublInvoice.setIssueDate(issueDate);
+
+        // Due date
+        DateType dueDate = new DateType();
+        dueDate.setValue(invoice.dueDate);
+        ublInvoice.setDueDate(dueDate);
+
+        // Invoice type code (380 = Commercial invoice)
+        ublInvoice.setInvoiceTypeCode(new CodeType("380"));
+
+        // Document currency code
+        ublInvoice.setDocumentCurrencyCode(new CodeType(invoice.currency));
+    }
+
+    private void setBuyerReferenceOrOrderReference(InvoiceType ublInvoice, Invoice invoice) {
+        if (invoice.buyerReference != null && !invoice.buyerReference.isEmpty()) {
+            ublInvoice.setBuyerReference(new TextType(invoice.buyerReference));
+        } else if (invoice.orderReference != null && !invoice.orderReference.isEmpty()) {
+            ublInvoice.setOrderReference(new OrderReferenceType(invoice.orderReference));
+        } else {
+            // Fallback: use invoice number as buyer reference to ensure compliance
+            ublInvoice.setBuyerReference(new TextType(invoice.invoiceNumber));
+        }
+    }
+
+    private SupplierPartyType createSupplierParty(Customer supplier) {
+        PartyType party = new PartyType();
 
         // Seller electronic address (PEPPOL-EN16931-R020 - mandatory)
         String endpointId = supplier.endpointId != null && !supplier.endpointId.isEmpty()
             ? supplier.endpointId
-            : supplier.organizationNumber; // Fallback to org number
+            : supplier.organizationNumber;
         String endpointScheme = supplier.endpointScheme != null && !supplier.endpointScheme.isEmpty()
             ? supplier.endpointScheme
-            : "0192"; // Default Norwegian org number scheme
-        Element endpointID = addCbcElement(doc, party, "EndpointID", endpointId);
-        endpointID.setAttribute("schemeID", endpointScheme);
+            : "0192";
+        party.setEndpointID(new IdentifierType(endpointId, endpointScheme));
 
         // Party identification (organization number)
-        Element partyIdentification = addCacElement(doc, party, "PartyIdentification");
-        Element partyId = addCbcElement(doc, partyIdentification, "ID", supplier.organizationNumber);
-        partyId.setAttribute("schemeID", "0192"); // Norwegian organization number scheme
+        PartyIdentificationType partyId = new PartyIdentificationType(
+            supplier.organizationNumber, "0192");
+        party.getPartyIdentifications().add(partyId);
 
         // Party name
-        Element partyName = addCacElement(doc, party, "PartyName");
-        addCbcElement(doc, partyName, "Name", supplier.companyName);
+        party.setPartyName(new PartyNameType(supplier.companyName));
 
-        // Postal address (BR-08 - mandatory with country code per BR-09)
-        Element postalAddress = addCacElement(doc, party, "PostalAddress");
-        if (supplier.address != null && !supplier.address.isEmpty()) {
-            addCbcElement(doc, postalAddress, "StreetName", supplier.address);
-        }
-        if (supplier.city != null && !supplier.city.isEmpty()) {
-            addCbcElement(doc, postalAddress, "CityName", supplier.city);
-        }
-        if (supplier.postalCode != null && !supplier.postalCode.isEmpty()) {
-            addCbcElement(doc, postalAddress, "PostalZone", supplier.postalCode);
-        }
-        // Country code is mandatory (BR-09)
-        Element country = addCacElement(doc, postalAddress, "Country");
-        addCbcElement(doc, country, "IdentificationCode", getCountryCode(supplier.country));
+        // Postal address
+        party.setPostalAddress(createAddress(
+            supplier.address,
+            supplier.city,
+            supplier.postalCode,
+            getCountryCode(supplier.country)
+        ));
 
         // Party tax scheme - VAT (NO-R-001: format NO{orgNumber}MVA)
-        Element partyTaxSchemeVAT = addCacElement(doc, party, "PartyTaxScheme");
-        addCbcElement(doc, partyTaxSchemeVAT, "CompanyID", "NO" + supplier.organizationNumber + "MVA");
-        Element taxSchemeVAT = addCacElement(doc, partyTaxSchemeVAT, "TaxScheme");
-        addCbcElement(doc, taxSchemeVAT, "ID", "VAT");
+        PartyTaxSchemeType vatTaxScheme = new PartyTaxSchemeType();
+        vatTaxScheme.setCompanyID(new IdentifierType("NO" + supplier.organizationNumber + "MVA"));
+        vatTaxScheme.setTaxScheme(new TaxSchemeType("VAT"));
+        party.getPartyTaxSchemes().add(vatTaxScheme);
 
         // Party tax scheme - Foretaksregisteret (NO-R-002: Norwegian legal requirement)
-        Element partyTaxSchemeTAX = addCacElement(doc, party, "PartyTaxScheme");
-        addCbcElement(doc, partyTaxSchemeTAX, "CompanyID", "Foretaksregisteret");
-        Element taxSchemeTAX = addCacElement(doc, partyTaxSchemeTAX, "TaxScheme");
-        addCbcElement(doc, taxSchemeTAX, "ID", "TAX");
+        PartyTaxSchemeType taxRegScheme = new PartyTaxSchemeType();
+        taxRegScheme.setCompanyID(new IdentifierType("Foretaksregisteret"));
+        taxRegScheme.setTaxScheme(new TaxSchemeType("TAX"));
+        party.getPartyTaxSchemes().add(taxRegScheme);
 
         // Party legal entity
-        Element partyLegalEntity = addCacElement(doc, party, "PartyLegalEntity");
-        addCbcElement(doc, partyLegalEntity, "RegistrationName", supplier.companyName);
-        addCbcElement(doc, partyLegalEntity, "CompanyID", supplier.organizationNumber);
+        PartyLegalEntityType legalEntity = new PartyLegalEntityType();
+        legalEntity.setRegistrationName(new TextType(supplier.companyName));
+        legalEntity.setCompanyID(new IdentifierType(supplier.organizationNumber));
+        party.setPartyLegalEntity(legalEntity);
 
         // Contact
         if (supplier.email != null || supplier.phone != null) {
-            Element contact = addCacElement(doc, party, "Contact");
+            ContactType contact = new ContactType();
             if (supplier.contactPerson != null) {
-                addCbcElement(doc, contact, "Name", supplier.contactPerson);
+                contact.setName(new TextType(supplier.contactPerson));
             }
             if (supplier.phone != null) {
-                addCbcElement(doc, contact, "Telephone", supplier.phone);
+                contact.setTelephone(new TextType(supplier.phone));
             }
             if (supplier.email != null) {
-                addCbcElement(doc, contact, "ElectronicMail", supplier.email);
+                contact.setElectronicMail(new TextType(supplier.email));
             }
+            party.setContact(contact);
         }
+
+        return new SupplierPartyType(party);
     }
 
-    private void addCustomerParty(Document doc, Element parent, Invoice invoice) {
-        Element customerParty = addCacElement(doc, parent, "AccountingCustomerParty");
-        Element party = addCacElement(doc, customerParty, "Party");
+    private CustomerPartyType createCustomerParty(Invoice invoice) {
+        PartyType party = new PartyType();
 
         // Buyer electronic address (PEPPOL-EN16931-R010 - mandatory)
         String buyerEndpointId = invoice.clientEndpointId != null && !invoice.clientEndpointId.isEmpty()
             ? invoice.clientEndpointId
             : (invoice.clientOrganizationNumber != null && !invoice.clientOrganizationNumber.isEmpty()
                 ? invoice.clientOrganizationNumber
-                : "NO-ENDPOINT"); // Last resort fallback
+                : "NO-ENDPOINT");
         String buyerEndpointScheme = invoice.clientEndpointScheme != null && !invoice.clientEndpointScheme.isEmpty()
             ? invoice.clientEndpointScheme
-            : "0192"; // Default Norwegian org number scheme
-        Element buyerEndpointID = addCbcElement(doc, party, "EndpointID", buyerEndpointId);
-        buyerEndpointID.setAttribute("schemeID", buyerEndpointScheme);
+            : "0192";
+        party.setEndpointID(new IdentifierType(buyerEndpointId, buyerEndpointScheme));
 
         // Party identification (organization number if available)
         if (invoice.clientOrganizationNumber != null && !invoice.clientOrganizationNumber.isEmpty()) {
-            Element partyIdentification = addCacElement(doc, party, "PartyIdentification");
-            Element partyId = addCbcElement(doc, partyIdentification, "ID", invoice.clientOrganizationNumber);
-            partyId.setAttribute("schemeID", "0192"); // Norwegian organization number scheme
+            PartyIdentificationType partyId = new PartyIdentificationType(
+                invoice.clientOrganizationNumber, "0192");
+            party.getPartyIdentifications().add(partyId);
         }
 
         // Party name
-        Element partyName = addCacElement(doc, party, "PartyName");
-        addCbcElement(doc, partyName, "Name", invoice.clientName);
+        party.setPartyName(new PartyNameType(invoice.clientName));
 
-        // Postal address (BR-10 - mandatory with country code per BR-11)
-        Element buyerPostalAddress = addCacElement(doc, party, "PostalAddress");
-        if (invoice.clientAddress != null && !invoice.clientAddress.isEmpty()) {
-            addCbcElement(doc, buyerPostalAddress, "StreetName", invoice.clientAddress);
-        }
-        if (invoice.clientCity != null && !invoice.clientCity.isEmpty()) {
-            addCbcElement(doc, buyerPostalAddress, "CityName", invoice.clientCity);
-        }
-        if (invoice.clientPostalCode != null && !invoice.clientPostalCode.isEmpty()) {
-            addCbcElement(doc, buyerPostalAddress, "PostalZone", invoice.clientPostalCode);
-        }
-        // Country code is mandatory (BR-11)
-        Element buyerCountry = addCacElement(doc, buyerPostalAddress, "Country");
-        addCbcElement(doc, buyerCountry, "IdentificationCode", "NO"); // Default to Norway
+        // Postal address
+        party.setPostalAddress(createAddress(
+            invoice.clientAddress,
+            invoice.clientCity,
+            invoice.clientPostalCode,
+            "NO" // Default to Norway
+        ));
 
         // Party legal entity
-        Element partyLegalEntity = addCacElement(doc, party, "PartyLegalEntity");
-        addCbcElement(doc, partyLegalEntity, "RegistrationName", invoice.clientName);
+        PartyLegalEntityType legalEntity = new PartyLegalEntityType();
+        legalEntity.setRegistrationName(new TextType(invoice.clientName));
         if (invoice.clientOrganizationNumber != null && !invoice.clientOrganizationNumber.isEmpty()) {
-            addCbcElement(doc, partyLegalEntity, "CompanyID", invoice.clientOrganizationNumber);
+            legalEntity.setCompanyID(new IdentifierType(invoice.clientOrganizationNumber));
         }
+        party.setPartyLegalEntity(legalEntity);
+
+        return new CustomerPartyType(party);
     }
 
-    private void addPaymentMeans(Document doc, Element parent, Invoice invoice) {
-        Element paymentMeans = addCacElement(doc, parent, "PaymentMeans");
+    private AddressType createAddress(String street, String city, String postalCode, String countryCode) {
+        AddressType address = new AddressType();
+
+        if (street != null && !street.isEmpty()) {
+            address.setStreetName(new TextType(street));
+        }
+        if (city != null && !city.isEmpty()) {
+            address.setCityName(new TextType(city));
+        }
+        if (postalCode != null && !postalCode.isEmpty()) {
+            address.setPostalZone(new TextType(postalCode));
+        }
+
+        // Country code is mandatory
+        address.setCountry(new CountryType(countryCode));
+
+        return address;
+    }
+
+    private PaymentMeansType createPaymentMeans(Invoice invoice) {
+        PaymentMeansType paymentMeans = new PaymentMeansType();
 
         // Payment means type code (30 = Credit transfer / bank transfer)
-        addCbcElement(doc, paymentMeans, "PaymentMeansCode", "30");
+        paymentMeans.setPaymentMeansCode(new CodeType("30"));
 
         // Payment ID (KID number or payment reference)
         if (invoice.paymentReference != null && !invoice.paymentReference.isEmpty()) {
-            addCbcElement(doc, paymentMeans, "PaymentID", invoice.paymentReference);
+            paymentMeans.setPaymentID(new IdentifierType(invoice.paymentReference));
         }
 
         // Payee financial account (bank account)
@@ -260,24 +263,28 @@ public class EHFInvoiceService {
                            (invoice.customer.bankAccount != null ? invoice.customer.bankAccount : null);
 
         if (bankAccount != null) {
-            Element payeeFinancialAccount = addCacElement(doc, paymentMeans, "PayeeFinancialAccount");
-            addCbcElement(doc, payeeFinancialAccount, "ID", bankAccount);
+            FinancialAccountType financialAccount = new FinancialAccountType();
+            financialAccount.setId(new IdentifierType(bankAccount));
 
-            // Add FinancialInstitutionBranch only if SWIFT/BIC is available
-            // Note: UBL-CR-429 - Name element should not be included
+            // Add FinancialInstitutionBranch (SWIFT/BIC) if available
             if (invoice.customer.swiftBic != null && !invoice.customer.swiftBic.isEmpty()) {
-                Element financialInstitutionBranch = addCacElement(doc, payeeFinancialAccount, "FinancialInstitutionBranch");
-                addCbcElement(doc, financialInstitutionBranch, "ID", invoice.customer.swiftBic);
+                financialAccount.setFinancialInstitutionBranchID(
+                    new IdentifierType(invoice.customer.swiftBic));
             }
+
+            paymentMeans.setPayeeFinancialAccount(financialAccount);
         }
+
+        return paymentMeans;
     }
 
-    private void addTaxTotal(Document doc, Element parent, Invoice invoice) {
-        Element taxTotal = addCacElement(doc, parent, "TaxTotal");
+    private TaxTotalType createTaxTotal(Invoice invoice) {
+        TaxTotalType taxTotal = new TaxTotalType();
 
         // Total tax amount
-        addCbcElement(doc, taxTotal, "TaxAmount", invoice.vatAmount.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", invoice.currency);
+        taxTotal.setTaxAmount(new AmountType(
+            invoice.vatAmount.setScale(2, RoundingMode.HALF_UP),
+            invoice.currency));
 
         // Group invoice lines by VAT rate to create proper tax subtotals
         Map<BigDecimal, BigDecimal> vatRateToTaxableAmount = new HashMap<>();
@@ -298,26 +305,31 @@ public class EHFInvoiceService {
             BigDecimal taxableAmount = entry.getValue();
             BigDecimal taxAmount = vatRateToTaxAmount.get(vatRate);
 
-            Element taxSubtotal = addCacElement(doc, taxTotal, "TaxSubtotal");
-            addCbcElement(doc, taxSubtotal, "TaxableAmount", taxableAmount.setScale(2, RoundingMode.HALF_UP).toString())
-                .setAttribute("currencyID", invoice.currency);
-            addCbcElement(doc, taxSubtotal, "TaxAmount", taxAmount.setScale(2, RoundingMode.HALF_UP).toString())
-                .setAttribute("currencyID", invoice.currency);
+            TaxSubtotalType subtotal = new TaxSubtotalType();
+            subtotal.setTaxableAmount(new AmountType(
+                taxableAmount.setScale(2, RoundingMode.HALF_UP),
+                invoice.currency));
+            subtotal.setTaxAmount(new AmountType(
+                taxAmount.setScale(2, RoundingMode.HALF_UP),
+                invoice.currency));
 
-            Element taxCategory = addCacElement(doc, taxSubtotal, "TaxCategory");
-
-            // Determine tax category code based on rate
+            // Tax category
+            TaxCategoryType taxCategory = new TaxCategoryType();
             String categoryCode = getTaxCategoryCode(vatRate);
-            addCbcElement(doc, taxCategory, "ID", categoryCode);
+            taxCategory.setId(new CodeType(categoryCode));
 
             // Add percentage for standard rates
             if (!"Z".equals(categoryCode) && !"E".equals(categoryCode)) {
-                addCbcElement(doc, taxCategory, "Percent", vatRate.setScale(2, RoundingMode.HALF_UP).toString());
+                taxCategory.setPercent(new NumericType(vatRate.setScale(2, RoundingMode.HALF_UP)));
             }
 
-            Element taxScheme = addCacElement(doc, taxCategory, "TaxScheme");
-            addCbcElement(doc, taxScheme, "ID", "VAT");
+            taxCategory.setTaxScheme(new TaxSchemeType("VAT"));
+            subtotal.setTaxCategory(taxCategory);
+
+            taxTotal.getTaxSubtotals().add(subtotal);
         }
+
+        return taxTotal;
     }
 
     /**
@@ -337,80 +349,72 @@ public class EHFInvoiceService {
         }
     }
 
-    private void addLegalMonetaryTotal(Document doc, Element parent, Invoice invoice) {
-        Element legalMonetaryTotal = addCacElement(doc, parent, "LegalMonetaryTotal");
+    private MonetaryTotalType createLegalMonetaryTotal(Invoice invoice) {
+        MonetaryTotalType monetaryTotal = new MonetaryTotalType();
 
-        addCbcElement(doc, legalMonetaryTotal, "LineExtensionAmount",
-            invoice.subtotal.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", invoice.currency);
+        monetaryTotal.setLineExtensionAmount(new AmountType(
+            invoice.subtotal.setScale(2, RoundingMode.HALF_UP),
+            invoice.currency));
 
-        addCbcElement(doc, legalMonetaryTotal, "TaxExclusiveAmount",
-            invoice.subtotal.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", invoice.currency);
+        monetaryTotal.setTaxExclusiveAmount(new AmountType(
+            invoice.subtotal.setScale(2, RoundingMode.HALF_UP),
+            invoice.currency));
 
-        addCbcElement(doc, legalMonetaryTotal, "TaxInclusiveAmount",
-            invoice.totalAmount.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", invoice.currency);
+        monetaryTotal.setTaxInclusiveAmount(new AmountType(
+            invoice.totalAmount.setScale(2, RoundingMode.HALF_UP),
+            invoice.currency));
 
-        addCbcElement(doc, legalMonetaryTotal, "PayableAmount",
-            invoice.totalAmount.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", invoice.currency);
+        monetaryTotal.setPayableAmount(new AmountType(
+            invoice.totalAmount.setScale(2, RoundingMode.HALF_UP),
+            invoice.currency));
+
+        return monetaryTotal;
     }
 
-    private void addInvoiceLine(Document doc, Element parent, InvoiceLine line) {
-        Element invoiceLine = addCacElement(doc, parent, "InvoiceLine");
+    private InvoiceLineType createInvoiceLine(InvoiceLine line, int lineNumber, String currency) {
+        InvoiceLineType invoiceLine = new InvoiceLineType();
 
         // Line ID
-        addCbcElement(doc, invoiceLine, "ID", line.lineNumber.toString());
+        invoiceLine.setId(new IdentifierType(String.valueOf(lineNumber)));
 
         // Invoiced quantity
-        Element invoicedQuantity = addCbcElement(doc, invoiceLine, "InvoicedQuantity",
-            line.quantity.setScale(2, RoundingMode.HALF_UP).toString());
-        invoicedQuantity.setAttribute("unitCode", line.unitCode != null ? line.unitCode : "EA");
+        invoiceLine.setInvoicedQuantity(new QuantityType(
+            line.quantity.setScale(2, RoundingMode.HALF_UP),
+            line.unitCode != null ? line.unitCode : "EA"));
 
         // Line extension amount (total for this line excluding VAT)
         BigDecimal lineAmount = line.unitPrice.multiply(line.quantity);
-        addCbcElement(doc, invoiceLine, "LineExtensionAmount",
-            lineAmount.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", "NOK");
+        invoiceLine.setLineExtensionAmount(new AmountType(
+            lineAmount.setScale(2, RoundingMode.HALF_UP),
+            currency));
 
         // Item
-        Element item = addCacElement(doc, invoiceLine, "Item");
-        addCbcElement(doc, item, "Description", line.description);
-        addCbcElement(doc, item, "Name", line.itemName != null ? line.itemName : line.description);
+        ItemType item = new ItemType();
+        item.setDescription(new TextType(line.description));
+        item.setName(new TextType(line.itemName != null ? line.itemName : line.description));
 
         // Sellers item identification (product ID/SKU)
         if (line.itemId != null && !line.itemId.isEmpty()) {
-            Element sellersItemId = addCacElement(doc, item, "SellersItemIdentification");
-            addCbcElement(doc, sellersItemId, "ID", line.itemId);
+            item.setSellersItemIdentification(new ItemIdentificationType(line.itemId));
         }
 
         // Classified tax category
-        Element classifiedTaxCategory = addCacElement(doc, item, "ClassifiedTaxCategory");
-        addCbcElement(doc, classifiedTaxCategory, "ID", "S"); // S = Standard rate
-        addCbcElement(doc, classifiedTaxCategory, "Percent",
-            line.vatRate.setScale(2, RoundingMode.HALF_UP).toString());
-        Element taxScheme = addCacElement(doc, classifiedTaxCategory, "TaxScheme");
-        addCbcElement(doc, taxScheme, "ID", "VAT");
+        TaxCategoryType taxCategory = new TaxCategoryType();
+        taxCategory.setId(new CodeType("S")); // S = Standard rate
+        taxCategory.setPercent(new NumericType(line.vatRate.setScale(2, RoundingMode.HALF_UP)));
+        taxCategory.setTaxScheme(new TaxSchemeType("VAT"));
+        item.setClassifiedTaxCategory(taxCategory);
+
+        invoiceLine.setItem(item);
 
         // Price
-        Element price = addCacElement(doc, invoiceLine, "Price");
-        addCbcElement(doc, price, "PriceAmount",
-            line.unitPrice.setScale(2, RoundingMode.HALF_UP).toString())
-            .setAttribute("currencyID", "NOK");
-    }
+        PriceType price = new PriceType();
+        price.setPriceAmount(new AmountType(
+            line.unitPrice.setScale(2, RoundingMode.HALF_UP),
+            currency));
+        invoiceLine.setPrice(price);
 
-    private Element addCbcElement(Document doc, Element parent, String name, String textContent) {
-        Element element = doc.createElementNS(CBC_NAMESPACE, "cbc:" + name);
-        element.setTextContent(textContent);
-        parent.appendChild(element);
-        return element;
-    }
-
-    private Element addCacElement(Document doc, Element parent, String name) {
-        Element element = doc.createElementNS(CAC_NAMESPACE, "cac:" + name);
-        parent.appendChild(element);
-        return element;
+        return invoiceLine;
     }
 
     private String getCountryCode(String countryName) {
@@ -421,17 +425,5 @@ public class EHFInvoiceService {
         if (lower.contains("sweden") || lower.contains("sverige")) return "SE";
         if (lower.contains("denmark") || lower.contains("danmark")) return "DK";
         return "NO"; // Default to Norway
-    }
-
-    private String transformToString(Document doc) throws Exception {
-        TransformerFactory tf = TransformerFactory.newInstance();
-        Transformer transformer = tf.newTransformer();
-        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
-        transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
-
-        StringWriter writer = new StringWriter();
-        transformer.transform(new DOMSource(doc), new StreamResult(writer));
-        return writer.toString();
     }
 }

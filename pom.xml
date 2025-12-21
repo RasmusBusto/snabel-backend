@@ -17,6 +17,9 @@
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
         <!-- Oxalis-NG version for PEPPOL integration -->
         <oxalis.version>6.3.0</oxalis.version>
+        <!-- JAXB configuration for UBL 2.1 class generation -->
+        <jaxb.version>4.0.2</jaxb.version>
+        <jaxb.generated.package>no.snabel.generated.ubl</jaxb.generated.package>
     </properties>
 
     <dependencyManagement>
@@ -169,6 +172,50 @@
                 <configuration>
                     <parameters>true</parameters>
                 </configuration>
+            </plugin>
+            <!-- JAXB plugin for generating UBL 2.1 classes from XSD schemas -->
+            <plugin>
+                <groupId>org.jvnet.jaxb</groupId>
+                <artifactId>jaxb-maven-plugin</artifactId>
+                <version>${jaxb.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-ubl-classes</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Schema directory -->
+                            <schemaDirectory>${project.basedir}/src/main/resources/xsd/ubl-2.1</schemaDirectory>
+                            <schemaIncludes>
+                                <include>maindoc/UBL-Invoice-2.1.xsd</include>
+                            </schemaIncludes>
+
+                            <!-- Output configuration -->
+                            <generateDirectory>${project.build.directory}/generated-sources/jaxb</generateDirectory>
+
+                            <!-- Binding customization -->
+                            <bindingDirectory>${project.basedir}/src/main/resources/xsd/bindings</bindingDirectory>
+                            <bindingIncludes>
+                                <include>ubl-bindings.xjb</include>
+                            </bindingIncludes>
+
+                            <!-- Episode file for dependency management -->
+                            <episode>true</episode>
+                            <episodeFile>${project.build.directory}/generated-sources/jaxb/META-INF/ubl-episode.xml</episodeFile>
+
+                            <!-- Plugin options -->
+                            <extension>true</extension>
+                            <args>
+                                <arg>-no-header</arg>
+                            </args>
+
+                            <!-- Clean generation -->
+                            <clearOutputDir>true</clearOutputDir>
+                            <verbose>false</verbose>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
